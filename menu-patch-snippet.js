@@ -1,11 +1,16 @@
 ﻿// Menu localizer function to append to dist/menu.js
 const menuTranslations = {
   'File': 'ファイル',
+  'Workspace': 'ワークスペース',
   'Edit': '編集',
   'View': '表示',
   'Window': 'ウィンドウ',
   'Help': 'ヘルプ',
   'New Window': '新しいウィンドウ',
+  'Open Workspace': 'ワークスペースを開く',
+  'Close Workspace': 'ワークスペースを閉じる',
+  'Add Folder to Workspace': 'ワークスペースにフォルダーを追加',
+  'Save Workspace As...': '名前を付けてワークスペースを保存...',
   'Docs': 'ドキュメント',
   'Check for Updates': '更新を確認',
   'Undo': '元に戻す',
