@@ -1,0 +1,17 @@
+# Node.js
+node_modules/
+package-lock.json
+
+# Build & Patch temporaries
+temp_extract/
+dist/
+*.patched
+*.new
+*.bak
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
