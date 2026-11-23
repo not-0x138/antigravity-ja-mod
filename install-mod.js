@@ -26,34 +26,14 @@ async function run() {
     process.exit(1);
   }
 
-  // 1. Check if current app.asar is a fresh update (unpatched)
-  console.log('[1/5] Checking application update state...');
-  let isAlreadyPatched = false;
-  try {
-    execSync(`npx --yes asar extract-file "${ASAR_PATH}" "dist/preload.js" > nul 2>&1`);
-    const extractedPreload = path.join(process.cwd(), 'dist', 'preload.js');
-    if (fs.existsSync(extractedPreload)) {
-      const content = fs.readFileSync(extractedPreload, 'utf8');
-      if (content.includes('Antigravity Japanese Localization Mod Start')) {
-        isAlreadyPatched = true;
-      }
-      fs.rmSync(path.join(process.cwd(), 'dist'), { recursive: true, force: true });
-    }
-  } catch (e) {
-    // Fallback if check fails
-  }
-
-  if (!isAlreadyPatched) {
-    console.log('      Clean or updated app.asar detected. Creating fresh backup...');
+  // 1. Prepare clean backup baseline
+  console.log('[1/5] Checking application backup...');
+  if (!fs.existsSync(BAK_PATH)) {
+    console.log('      Creating initial backup from current app.asar...');
     fs.copyFileSync(ASAR_PATH, BAK_PATH);
     console.log('      Backup saved to:', BAK_PATH);
   } else {
-    if (!fs.existsSync(BAK_PATH)) {
-      console.log('      Notice: asar is already patched. Creating backup of current state.');
-      fs.copyFileSync(ASAR_PATH, BAK_PATH);
-    } else {
-      console.log('      Using clean baseline backup:', BAK_PATH);
-    }
+    console.log('      Using existing backup:', BAK_PATH);
   }
 
   // Ensure junction exists for app.asar.bak.unpacked
@@ -68,31 +48,56 @@ async function run() {
     fs.rmSync(TEMP_EXTRACT_DIR, { recursive: true, force: true });
   }
 
-  // 3. Extract asar from clean backup
+  // 3. Extract asar from clean backup (or ASAR_PATH if BAK_PATH somehow failed)
+  const sourceAsar = fs.existsSync(BAK_PATH) ? BAK_PATH : ASAR_PATH;
   console.log('[2/5] Extracting asar archive...');
-  execSync(`npx --yes asar extract "${BAK_PATH}" "${TEMP_EXTRACT_DIR}"`, { stdio: 'inherit' });
+  execSync(`npx --yes asar extract "${sourceAsar}" "${TEMP_EXTRACT_DIR}"`, { stdio: 'inherit' });
 
-  // 4. Patch dist/preload.js
+  // 4. Patch dist/preload.js safely (idempotent)
   console.log('[3/5] Injecting localization engine into preload script...');
   const preloadPath = path.join(TEMP_EXTRACT_DIR, 'dist', 'preload.js');
+  let preloadContent = fs.readFileSync(preloadPath, 'utf8');
+
+  // Strip existing patch if any (ensures clean baseline)
+  const preloadPatchIdx = preloadContent.indexOf('// --- Antigravity Japanese Localization Mod Start ---');
+  if (preloadPatchIdx !== -1) {
+    preloadContent = preloadContent.substring(0, preloadPatchIdx).trimEnd() + '\n';
+  }
+
   const dictData = fs.readFileSync(path.join(WORK_DIR, 'jp-dict.json'), 'utf8');
   let rendererScript = fs.readFileSync(path.join(WORK_DIR, 'jp-mod-renderer.js'), 'utf8');
   rendererScript = rendererScript.replace('__JP_MOD_DATA__', dictData);
 
   const preloadPatch = `\n\n// --- Antigravity Japanese Localization Mod Start ---\n${rendererScript}\n// --- Antigravity Japanese Localization Mod End ---\n`;
-  fs.appendFileSync(preloadPath, preloadPatch, 'utf8');
+  preloadContent += preloadPatch;
+  fs.writeFileSync(preloadPath, preloadContent, 'utf8');
 
-  // 5. Patch dist/menu.js
-  console.log('[4/5] Patching application menu (File, View, Window, Help)...');
+  // 5. Patch dist/menu.js safely (idempotent, strictly prevents duplicate declarations)
+  console.log('[4/5] Patching application menu (File, Workspace, View, Window, Help)...');
   const menuPath = path.join(TEMP_EXTRACT_DIR, 'dist', 'menu.js');
   const menuPatchCode = fs.readFileSync(path.join(WORK_DIR, 'menu-patch-snippet.js'), 'utf8');
   let menuContent = fs.readFileSync(menuPath, 'utf8');
+
+  // Strip any existing menu patch
+  const patchStartIdx = menuContent.indexOf('// --- Antigravity Japanese Menu Patch Start ---');
+  if (patchStartIdx !== -1) {
+    menuContent = menuContent.substring(0, patchStartIdx).trimEnd() + '\n';
+  } else {
+    const legacyIdx = menuContent.search(/(\r?\n)*(\uFEFF)?\/\/\s*Menu localizer function/);
+    if (legacyIdx !== -1) {
+      menuContent = menuContent.substring(0, legacyIdx).trimEnd() + '\n';
+    }
+  }
+  // Strip any existing translateMenuItems call
+  menuContent = menuContent.replace(/translateMenuItems\(menu\);\s*/g, '');
+
+  // Inject fresh patch
   if (menuContent.includes('electron_1.Menu.setApplicationMenu(menu);')) {
     menuContent = menuContent.replace(
       'electron_1.Menu.setApplicationMenu(menu);',
       'translateMenuItems(menu);\n    electron_1.Menu.setApplicationMenu(menu);'
     );
-    menuContent += `\n\n${menuPatchCode}\n`;
+    menuContent += `\n\n// --- Antigravity Japanese Menu Patch Start ---\n${menuPatchCode}\n// --- Antigravity Japanese Menu Patch End ---\n`;
     fs.writeFileSync(menuPath, menuContent, 'utf8');
   }
 

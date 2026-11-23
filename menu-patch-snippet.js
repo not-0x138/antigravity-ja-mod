@@ -1,5 +1,5 @@
 ﻿// Menu localizer function to append to dist/menu.js
-const menuTranslations = {
+var menuTranslations = {
   'File': 'ファイル',
   'Workspace': 'ワークスペース',
   'Edit': '編集',
