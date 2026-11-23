@@ -20,14 +20,15 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo ===================================================
     echo  日本語化パッチの適用が正常に完了しました！
-    echo  Antigravity を再起動します...
+    echo  Antigravity を起動します...
     echo ===================================================
-    start "" "%LOCALAPPDATA%\Programs\antigravity\Antigravity.exe"
+    powershell -NoProfile -Command "Start-Process '%LOCALAPPDATA%\Programs\antigravity\Antigravity.exe'"
+    timeout /t 2 /nobreak > nul
+    exit /b 0
 ) else (
     echo.
     echo ===================================================
     echo  [エラー] パッチの適用に失敗しました。
     echo ===================================================
+    pause
 )
-echo.
-pause
